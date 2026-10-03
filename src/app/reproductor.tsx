@@ -1,10 +1,11 @@
 import { cancionesPopulares } from '@/datos/canciones';
+import { usePlaylists } from '@/contexto/ProveedorPlaylists';
 import { colores } from '@/estilos/colores';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { ActivityIndicator, Appbar, Menu, Snackbar } from 'react-native-paper';
+import { ActivityIndicator, Appbar, Button, Dialog, Menu, Portal, RadioButton, Snackbar } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function Reproductor() {
@@ -14,6 +15,11 @@ export default function Reproductor() {
   const [menuVisible, setMenuVisible] = useState(false);
   const [favorito, setFavorito] = useState(false);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
+  const [dialogoPlaylistVisible, setDialogoPlaylistVisible] = useState(false);
+  const [playlistSeleccionada, setPlaylistSeleccionada] = useState('');
+  const [snackbarPlaylistVisible, setSnackbarPlaylistVisible] = useState(false);
+  const [mensajePlaylist, setMensajePlaylist] = useState('');
+  const { playlists, cargando: cargandoPlaylists, agregarCancion, error, limpiarError } = usePlaylists();
 
   useEffect(() => {
     const temporizador = setTimeout(() => setCargando(false), 400);
@@ -26,6 +32,27 @@ export default function Reproductor() {
   function alternarFavorito() {
     setFavorito((actual) => !actual);
     setSnackbarVisible(true);
+  }
+
+  function abrirSelectorPlaylist() {
+    setMenuVisible(false);
+    if (playlists.length > 0) {
+      setPlaylistSeleccionada(playlists[0].id);
+    }
+    setDialogoPlaylistVisible(true);
+  }
+
+  function agregarAPlaylist() {
+    const playlist = playlists.find((item) => item.id === playlistSeleccionada);
+    if (!playlist) {
+      return;
+    }
+
+    const yaAgregada = playlist.cancionIds.includes(cancion.id);
+    agregarCancion(playlist.id, cancion.id);
+    setMensajePlaylist(yaAgregada ? 'La cancion ya estaba en la playlist' : `Agregada a ${playlist.nombre}`);
+    setSnackbarPlaylistVisible(true);
+    setDialogoPlaylistVisible(false);
   }
 
   if (cargando) {
@@ -55,10 +82,63 @@ export default function Reproductor() {
           }
         >
           <Menu.Item onPress={() => setMenuVisible(false)} title="Compartir" leadingIcon="share-variant" />
-          <Menu.Item onPress={() => setMenuVisible(false)} title="Agregar a lista" leadingIcon="playlist-plus" />
+          <Menu.Item onPress={abrirSelectorPlaylist} title="Agregar a lista" leadingIcon="playlist-plus" />
           <Menu.Item onPress={() => setMenuVisible(false)} title="Reportar" leadingIcon="flag-outline" />
         </Menu>
       </Appbar.Header>
+
+      <Portal>
+        <Dialog
+          visible={dialogoPlaylistVisible}
+          onDismiss={() => setDialogoPlaylistVisible(false)}
+          style={estilos.dialogo}
+        >
+          <Dialog.Title style={estilos.tituloDialogo}>Agregar a playlist</Dialog.Title>
+          <Dialog.Content>
+            {cargandoPlaylists ? (
+              <ActivityIndicator animating color={colores.acento} />
+            ) : playlists.length === 0 ? (
+              <Text style={estilos.textoDialogo}>Primero crea una playlist en tu biblioteca.</Text>
+            ) : (
+              <RadioButton.Group value={playlistSeleccionada} onValueChange={setPlaylistSeleccionada}>
+                {playlists.map((playlist) => (
+                  <RadioButton.Item
+                    key={playlist.id}
+                    label={playlist.nombre}
+                    value={playlist.id}
+                    color={colores.acento}
+                    labelStyle={estilos.textoDialogo}
+                  />
+                ))}
+              </RadioButton.Group>
+            )}
+          </Dialog.Content>
+          <Dialog.Actions>
+            {playlists.length === 0 && !cargandoPlaylists ? (
+              <Button
+                textColor={colores.acento}
+                onPress={() => {
+                  setDialogoPlaylistVisible(false);
+                  router.push('/(tabs)/biblioteca');
+                }}
+              >
+                Ir a Biblioteca
+              </Button>
+            ) : (
+              <Button
+                textColor={colores.acento}
+                onPress={agregarAPlaylist}
+                disabled={cargandoPlaylists || !playlistSeleccionada}
+              >
+                Agregar
+              </Button>
+            )}
+            <Button textColor={colores.textoSecundario} onPress={() => setDialogoPlaylistVisible(false)}>
+              Cerrar
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
 
       <View style={estilos.contenedorCaratula}>
         <View style={[estilos.caratula, { backgroundColor: cancion.color }]} />
@@ -105,6 +185,18 @@ export default function Reproductor() {
       >
         {favorito ? 'Agregado a favoritos' : 'Quitado de favoritos'}
       </Snackbar>
+
+      <Snackbar
+        visible={snackbarPlaylistVisible || Boolean(error)}
+        onDismiss={() => {
+          setSnackbarPlaylistVisible(false);
+          limpiarError();
+        }}
+        duration={2500}
+        style={estilos.snackbar}
+      >
+        {error ?? mensajePlaylist}
+      </Snackbar>
     </SafeAreaView>
   );
 }
@@ -126,5 +218,8 @@ const estilos = StyleSheet.create({
   botonPlay: { width: 60, height: 60, borderRadius: 30, backgroundColor: colores.acento, alignItems: 'center', justifyContent: 'center' },
   botonLyrics: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 24, marginBottom: 12, gap: 6 },
   textoLyrics: { color: colores.textoSecundario, fontSize: 12, fontWeight: '600' },
+  dialogo: { backgroundColor: colores.fondoTarjeta },
+  tituloDialogo: { color: colores.texto },
+  textoDialogo: { color: colores.textoSecundario },
   snackbar: { backgroundColor: colores.fondoTarjeta },
 });

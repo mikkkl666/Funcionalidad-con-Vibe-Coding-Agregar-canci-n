@@ -6,6 +6,12 @@ export type Cancion = {
   categoria: string;
 };
 
+export type Playlist = {
+  id: string;
+  nombre: string;
+  cancionIds: string[];
+};
+
 export type PropsChip = {
   texto: string;
   activo: boolean;
